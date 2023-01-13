@@ -1,0 +1,193 @@
+{% extends 'core/base.html' %}
+
+{% block title %}{{ room.name }} {% endblock%}
+
+{% block content %}
+<div class="p-10 lg:p-20 text-center">
+    <h1 class="text-3xl lg:text-6xl text-white">{{ room.name }}</h1>
+</div>
+
+<div class="lg:w-2/4 mx-4 lg:mx-auto p-4 bg-white rounded-xl">
+    <div class="chat-messages space-y-3" id="chat-messages">     
+        {% for message in messages %}
+            <div class="p-4 rounded-xl"> 
+                {% if request.user.username !=  message.user.username %}               
+                   <div class="items-center">                                       
+                        <div class="flex-1 bg-neutral-800 text-white p-2 rounded-lg mb-0 relative w-1/2 mr-auto">                        
+                            <div>
+                                <p class="font-semibold 
+                                        author-message 
+                                        author-identification-{{ message.user.username }}">
+                                        {{ message.user.username }}</p>                                   
+                                
+                                <p class="font-semibold break-words">{{ message.content }}</p>
+                            </div>
+                            <div class="absolute left-0 top-1/2 transform -translate-x-1/2 rotate-45 w-2 h-2 bg-neutral-800"></div>
+                        </div>  
+                    </div>
+                {% else %}
+                    <div class="items-center">
+                        <div class="flex-1 bg-orange-500 text-white p-2 rounded-lg mb-0 relative w-1/2 ml-auto">                    
+                            <div>                                
+                                <p class="font-semibold break-words">{{ message.content }}</p>
+                            </div>
+                            <div class="absolute right-0 top-1/2 transform translate-x-1/2 rotate-45 w-2 h-2 bg-orange-500"></div>
+                        </div>                        
+                    </div>
+                {% endif %}                
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="lg:w-2/4 mt-6 mx-4 lg:mx-auto p-4 bg-white rounded-xl">
+    <form method="post" action="." class="flex">
+        <input type="text" name="content" class="flex-1 mr-3" placeholder="Escreva algo..." id="chat-message-input">
+        <button class="px-5 py-3 rounded-xl text-white bg-orange-500 hover:bg-neutral-800"
+        id="chat-message-submit">
+            Enviar
+        </button>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+{{ user_color_scheme|json_script:"json-color-scheme" }}
+{{ user_id_list|json_script:"json-user-on-chat" }}
+{{ room.slug|json_script:"json-roomname" }}
+{{ request.user.username|json_script:"json-username" }}
+
+<script>
+    
+    const userOnChat = JSON.parse(document.getElementById('json-user-on-chat').textContent); 
+    var color_scheme = JSON.parse(document.getElementById('json-color-scheme').textContent);   
+    function return_color(){
+       
+            for (i=0;i< userOnChat.length;i++){                
+                var searchIndex = color_scheme.findIndex((color) => color.user_id==userOnChat[i]);
+                var color_scheme_color = color_scheme[searchIndex].color_scheme
+                document.querySelectorAll(".author-identification-"+userOnChat[i]).forEach(author_label => {
+                    author_label.classList.add('text-['+color_scheme_color+']');
+                })
+            }
+        
+    }
+    return_color()
+                                   
+    
+    const roomName = JSON.parse(document.getElementById('json-roomname').textContent);
+    const userName = JSON.parse(document.getElementById('json-username').textContent);
+
+    const chatSocket = new WebSocket(
+        'ws://'
+        +window.location.host
+        +'/ws/'
+        +roomName 
+        +'/'      
+    );
+
+    chatSocket.onmessage = function(e){
+        console.log('onmessage')
+
+        const data = JSON.parse(e.data);
+
+        if(data.message){
+            var nameOnMessage = data.username
+            if (data.username == userName){          
+
+                html = return_my_message_structure(data.message,nameOnMessage)
+                document.querySelector('#chat-messages').innerHTML += html;
+
+            }else{
+
+                html = return_message_structure(data.message,nameOnMessage)
+                document.querySelector('#chat-messages').innerHTML += html;               
+                var searchIndex = color_scheme.findIndex((color) => color.user_id==nameOnMessage);
+                var color_scheme_color = color_scheme[searchIndex].color_scheme
+                document.querySelectorAll(".author-identification-"+nameOnMessage).forEach(author_label => {                    
+                    author_label.classList.add('text-['+color_scheme_color+']');
+                })
+
+            }
+            scrollToBottom();
+        }else{
+            alert("Mensagem vazia")
+        }
+    }
+
+    chatSocket.onclose = function(e){
+        console.log('onclose')
+    }
+    //
+    document.querySelector('#chat-message-submit').onclick = function(e){
+        e.preventDefault();
+        
+        const messageInputDom = document.querySelector("#chat-message-input");
+        const message = messageInputDom.value;
+        chatSocket.send(JSON.stringify({
+            'message':message,
+            'username':userName,
+            'room':roomName
+        }))
+
+        messageInputDom.value = '';
+        return false;
+    }
+
+    //
+
+    function scrollToBottom(){
+        const objDiv = document.querySelector('#chat-messages');
+        objDiv.scrollTop = objDiv.scrollHeight;
+    }
+    scrollToBottom();
+
+    //
+
+    const roomSocket = new WebSocket(
+        'ws://'
+        +window.location.host
+        +'/ws/listen-room-update/'
+        +roomName 
+        +'/'      
+    );
+
+    roomSocket.onmessage = function(e){
+
+        alert("Sala teve infos modificadas. Por favor, atualize a página")
+    }
+
+    function return_my_message_structure(message,author){
+
+        return `<div class="p-4 rounded-xl"> 
+                    <div class="items-center">
+                        <div class="flex-1 bg-orange-500 text-white p-2 rounded-lg mb-0 relative w-1/2 ml-auto">                      
+                            <div>                                
+                                <p class="font-semibold break-words">${message}</p>
+                            </div>
+                            <div class="absolute right-0 top-1/2 transform translate-x-1/2 rotate-45 w-2 h-2 bg-orange-500"></div>
+                        </div>                          
+                    </div>
+                </div>`
+    }
+
+    function return_message_structure(message,author){
+
+        var class_color = "author-identification-"+author
+        return `<div class="p-4 rounded-xl"> 
+                    <div class="items-center">                                          
+                        <div class="flex-1 bg-neutral-800 text-white p-2 rounded-lg mb-0 relative w-1/2 mr-auto">                      
+                            <div>
+                                <p class="font-semibold author-message ${class_color}">${author}</p>
+                                <p class="font-semibold break-words">${message}</p>
+                            </div>
+                            <div class="absolute left-0 top-1/2 transform -translate-x-1/2 rotate-45 w-2 h-2 bg-neutral-800"></div>
+                        </div> 
+                    </div>
+                </div>`
+    }
+
+    </script>
+{% endblock %}

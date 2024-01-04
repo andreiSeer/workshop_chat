@@ -4,7 +4,7 @@ Projeto utilizado para demonstrar uso de websockets, django channels e signals.
 
 * Aplicação simples de Chat;
 
-* Utilizando uma estrutura de Websockets semelhantes ao do Report;
+* Utilizando uma estrutura de Websockets;
 
 * Configuração do Django Channels;
 
